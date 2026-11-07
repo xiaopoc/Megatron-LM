@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
-# Launcher-ready command from job 711528; measured code: 6a975c1aab457ae88b16247582674c3dc81a1300.
+# Qwen3.5-VL 397B-A17B, full 60-layer language model, VL + MDP, 16K sequence length.
+# Sized for 128 GB300 GPUs: 32 nodes x 4 GPUs. Each pipeline stage, 16 nodes, must be within one NVL72 NVLink domain.
 # Run INSIDE an allocated GPU container. This script does not allocate nodes.
 # Pass a launcher prefix, e.g. python under a per-rank srun, or torchrun with all topology arguments.
 set -euo pipefail
@@ -10,7 +11,7 @@ if [[ $# -eq 0 ]]; then
 fi
 REPRO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 MCORE_ROOT="$(cd -- "$REPRO_DIR/../../../../../.." && pwd)"
-MCORE_BENCH_OUTPUT="${MCORE_BENCH_OUTPUT:-$MCORE_ROOT/runtime/mdp_rebench/s4k_pp2ep64_native_varlen}"
+MCORE_BENCH_OUTPUT="${MCORE_BENCH_OUTPUT:-$MCORE_ROOT/runtime/mdp_rebench/s16k_pp2ep64_mdp_60L_128gpu}"
 export MCORE_ROOT MCORE_BENCH_OUTPUT
 export PYTHONPATH="$MCORE_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 export CUDA_DEVICE_MAX_CONNECTIONS=8
@@ -78,7 +79,7 @@ exec "$@" "$MCORE_ROOT/examples/multimodal_dev/pretrain_multimodal.py" \
     --tensor-model-parallel-size 1 \
     --pipeline-model-parallel-size 2 \
     --expert-model-parallel-size 64 \
-    --pipeline-model-parallel-layout 'Et*16|t*16|t*16|t*12,m,L' \
+    --pipeline-model-parallel-layout 'Et*32|t*28,m,L' \
     --context-parallel-size 1 \
     --expert-tensor-parallel-size 1 \
     --use-distributed-optimizer \
@@ -100,11 +101,12 @@ exec "$@" "$MCORE_ROOT/examples/multimodal_dev/pretrain_multimodal.py" \
     --transformer-impl transformer_engine \
     --gdn-pre-gated-delta-rule-fusion \
     --gdn-kernel-backend cudnn \
+    --recompute-granularity selective \
+    --recompute-modules moe_act gdn \
     --micro-batch-size 1 \
     --global-batch-size 2048 \
-    --seq-length 4096 \
+    --seq-length 16384 \
     --train-samples 585937500 \
-    --exit-duration-in-mins 25 \
     --exit-interval 20 \
     --no-save-optim \
     --no-check-for-nan-in-loss-and-grad \
@@ -117,8 +119,8 @@ exec "$@" "$MCORE_ROOT/examples/multimodal_dev/pretrain_multimodal.py" \
     --num-workers 6 \
     --calculate-per-token-loss \
     --pad-packed-seq-alignment max \
-    --max-seqlen-per-dp-cp-rank 4096 \
-    --thd-max-packed-sequences 8 \
+    --max-seqlen-per-dp-cp-rank 16384 \
+    --thd-max-packed-sequences 16 \
     --thd-tail-padding-policy append_dummy_seq \
     --use-precision-aware-optimizer \
     --main-grads-dtype fp32 \
@@ -148,7 +150,7 @@ exec "$@" "$MCORE_ROOT/examples/multimodal_dev/pretrain_multimodal.py" \
     --log-interval 1 \
     --log-timers-to-tensorboard \
     --log-memory-to-tensorboard \
-    --log-memory-interval 5 \
+    --log-memory-interval 1 \
     --log-device-memory-used \
     --logging-level 40 \
     --tensorboard-dir "${MCORE_BENCH_OUTPUT}/tensorboard" \
@@ -159,8 +161,11 @@ exec "$@" "$MCORE_ROOT/examples/multimodal_dev/pretrain_multimodal.py" \
     --vision-num-layers 27 \
     --hf-processor-path Qwen/Qwen3.5-397B-A17B \
     --sft \
-    --total-seq-length 4096 \
+    --total-seq-length 16384 \
     --thd-static-packing \
     --mdp-greedy-packing \
-    --mdp-mock-dataset-config-json "${MCORE_ROOT}/examples/multimodal_dev/doc/mdp/recipes/data/mock_lognormal.json" \
-    --recompute-vision
+    --mdp-mock-dataset-config-json "${MCORE_ROOT}/examples/multimodal_dev/doc/mdp/recipes/data/mock_fixed_16384.json" \
+    --mdp-enable \
+    --mdp-overlap-window-capture \
+    --encoder-recompute-granularity whole \
+    --mdp-encoder-max-payload-rows 65536

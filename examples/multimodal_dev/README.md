@@ -3,12 +3,12 @@
 Standalone, model-agnostic training entry point for multimodal
 vision-language models built on Megatron-Core (FSDP + EP).
 
-## MDP rebench milestones (this branch)
+## Qwen3.5-VL 397B-A17B at 32K on 64 GB300 GPUs (this branch)
 
-See [MDP benchmark results and complete recipes](doc/mdp/README.md): approximately
-474 TFLOP/s/GPU for 35B, 625 TFLOP/s/GPU for 397B-VL with one 4096-token sequence
-per pack, and the separate variable-length THD Native-VL versus MDP comparison.
-Measured source revisions, environment requirements and comparison limits are included.
+See [the 32K recipe, requirements and reference results](doc/mdp/README.md): a 28-layer
+proxy of Qwen3.5-VL 397B-A17B with MDP at a 32K sequence length, at about
+866 TFLOP/s/GPU on a single rack of 64 GB300 GPUs. The same document also covers the full
+60-layer model at a 16K sequence length on 128 GB300 GPUs.
 
 ## Directory Structure
 
